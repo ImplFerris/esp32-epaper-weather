@@ -161,55 +161,6 @@ impl Dashboard {
     }
 
     async fn access_website(&mut self, tls_reference: TlsReference<'_>) -> WeatherData {
-        // let json_data = r#"
-        //     {
-        //         "coord": {
-        //             "lon": -0.1257,
-        //             "lat": 51.5085
-        //         },
-        //         "weather": [
-        //             {
-        //             "id": 800,
-        //             "main": "Clear",
-        //             "description": "clear sky",
-        //             "icon": "01n"
-        //             }
-        //         ],
-        //         "base": "stations",
-        //         "main": {
-        //             "temp": 3.75,
-        //             "feels_like": 1.23,
-        //             "temp_min": 3.75,
-        //             "temp_max": 3.75,
-        //             "pressure": 1025,
-        //             "humidity": 83,
-        //             "sea_level": 1025,
-        //             "grnd_level": 1020
-        //         },
-        //         "visibility": 10000,
-        //         "wind": {
-        //             "speed": 2.72,
-        //             "deg": 51,
-        //             "gust": 8.22
-        //         },
-        //         "clouds": {
-        //             "all": 9
-        //         },
-        //         "dt": 1743995436,
-        //         "sys": {
-        //             "country": "GB",
-        //             "sunrise": 1744003317,
-        //             "sunset": 1744051371
-        //         },
-        //         "timezone": 3600,
-        //         "id": 2643743,
-        //         "name": "London",
-        //         "cod": 200
-        //     }
-        // // "#;
-        // let (data, _): (WeatherData, _) = serde_json_core::de::from_str(json_data).unwrap();
-        // data
-
         let dns = DnsSocket::new(self.wifi);
         let tcp_state = TcpClientState::<1, 4096, 4096>::new();
         let tcp = TcpClient::new(self.wifi, &tcp_state);
