@@ -76,7 +76,7 @@ esp-mbedtls = { git = "https://github.com/esp-rs/esp-mbedtls.git", rev = "03458c
 ] }
 epd-waveshare = { features = [
   "graphics",
-], git = "https://github.com/ImplFerris/epd-waveshare", branch = "1in54_v2_fix" }
+], git = "https://github.com/ImplFerris/epd-waveshare" }
 
 
 [profile.dev]

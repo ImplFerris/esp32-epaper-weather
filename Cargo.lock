@@ -834,7 +834,7 @@ dependencies = [
 [[package]]
 name = "epd-waveshare"
 version = "0.6.0"
-source = "git+https://github.com/ImplFerris/epd-waveshare?branch=1in54_v2_fix#0f8d31af89a13ff3245c4e341d8b15ddff7ed73e"
+source = "git+https://github.com/ImplFerris/epd-waveshare#d324089198398e877716287e04e57496b24fa62e"
 dependencies = [
  "bit_field",
  "embedded-graphics-core",
