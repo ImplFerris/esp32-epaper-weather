@@ -10,11 +10,7 @@ use embedded_graphics::{
 };
 
 use defmt::info;
-use embassy_net::{
-    dns::DnsSocket,
-    tcp::client::{TcpClient, TcpClientState},
-    Stack,
-};
+use embassy_net::Stack;
 use embassy_time::{Delay, Duration, Timer};
 use embedded_graphics::{
     mono_font::{ascii::FONT_10X20, MonoTextStyleBuilder},
@@ -36,18 +32,13 @@ use esp_hal::{
 };
 use heapless::String;
 use profont::{PROFONT_18_POINT, PROFONT_24_POINT};
-use reqwless::{
-    client::{HttpClient, TlsConfig},
-    TlsReference,
-};
+use reqwless::TlsReference;
 use tinybmp::Bmp;
 
-use crate::{icons::ICONS, weather::WeatherData};
+use crate::{icons::ICONS, weather::WeatherApi};
 
 type SpiDevice = ExclusiveDevice<Spi<'static, esp_hal::Blocking>, Output<'static>, Delay>;
 type EPD = Epd1in54<SpiDevice, Input<'static>, Output<'static>, Output<'static>, Delay>;
-
-const API_KEY: &str = env!("API_KEY");
 
 pub struct Dashboard {
     display: Display1in54,
@@ -55,28 +46,16 @@ pub struct Dashboard {
     _rng: Rng,
     epd: EPD,
     spi_dev: SpiDevice,
-    api_url: String<120>,
 }
 
 impl Dashboard {
     pub fn new(wifi: Stack<'static>, rng: Rng, epd: EPD, spi_dev: SpiDevice) -> Self {
-        let mut api_url = String::new();
-
-        api_url
-            .push_str(
-                "https://api.openweathermap.org/data/2.5/weather?q=London&units=metric&appid=",
-            )
-            .unwrap();
-
-        api_url.push_str(API_KEY).unwrap();
-
         Self {
             display: Display1in54::default(),
             wifi,
             _rng: rng,
             epd,
             spi_dev,
-            api_url,
         }
     }
 
@@ -87,16 +66,17 @@ impl Dashboard {
             .expect("TLS::new with peripherals.SHA failed")
             .with_hardware_rsa(rsa);
 
+        let api = WeatherApi::new(self.wifi);
         loop {
-            self.refresh(tls.reference()).await;
+            self.refresh(&api, tls.reference()).await;
 
             Timer::after(Duration::from_secs(60)).await;
         }
     }
 
-    pub async fn refresh(&mut self, tls_reference: TlsReference<'_>) {
+    pub async fn refresh(&mut self, api: &WeatherApi, tls_reference: TlsReference<'_>) {
         info!("Getting weather data");
-        let weather_data = self.access_website(tls_reference).await;
+        let weather_data = api.access_website(tls_reference).await;
         info!("Got weather data");
 
         self.epd.wake_up(&mut self.spi_dev, &mut Delay).unwrap();
@@ -158,37 +138,6 @@ impl Dashboard {
             .into_styled(PrimitiveStyle::with_stroke(Color::Black, 5))
             .draw(&mut self.display)
             .unwrap();
-    }
-
-    async fn access_website(&mut self, tls_reference: TlsReference<'_>) -> WeatherData {
-        let dns = DnsSocket::new(self.wifi);
-        let tcp_state = TcpClientState::<1, 4096, 4096>::new();
-        let tcp = TcpClient::new(self.wifi, &tcp_state);
-        let tls_config = TlsConfig::new(
-            reqwless::TlsVersion::Tls1_2,
-            reqwless::Certificates {
-                ca_chain: reqwless::X509::pem(
-                    concat!(include_str!("./ca_cert.pem"), "\0").as_bytes(),
-                )
-                .ok(),
-                ..Default::default()
-            },
-            tls_reference,
-        );
-
-        let mut client = HttpClient::new_with_tls(&tcp, &dns, tls_config);
-        let mut buffer = [0u8; 4096];
-        let mut http_req = client
-            .request(reqwless::request::Method::GET, &self.api_url)
-            .await
-            .unwrap();
-        let response = http_req.send(&mut buffer).await.unwrap();
-
-        info!("Got response");
-        let res = response.body().read_to_end().await.unwrap();
-
-        let (data, _): (WeatherData, _) = serde_json_core::de::from_slice(res).unwrap();
-        data
     }
 
     fn draw_humidity(&mut self, humidity: i32) {
@@ -292,58 +241,6 @@ impl Dashboard {
         )
         .draw(&mut self.display)
         .unwrap();
-    }
-
-    #[allow(dead_code)]
-    async fn get_example_data(&mut self) -> WeatherData {
-        let json_data = r#"
-            {
-                "coord": {
-                    "lon": -0.1257,
-                    "lat": 51.5085
-                },
-                "weather": [
-                    {
-                    "id": 800,
-                    "main": "Clear",
-                    "description": "clear sky",
-                    "icon": "01n"
-                    }
-                ],
-                "base": "stations",
-                "main": {
-                    "temp": 3.75,
-                    "feels_like": 1.23,
-                    "temp_min": 3.75,
-                    "temp_max": 3.75,
-                    "pressure": 1025,
-                    "humidity": 83,
-                    "sea_level": 1025,
-                    "grnd_level": 1020
-                },
-                "visibility": 10000,
-                "wind": {
-                    "speed": 2.72,
-                    "deg": 51,
-                    "gust": 8.22
-                },
-                "clouds": {
-                    "all": 9
-                },
-                "dt": 1743995436,
-                "sys": {
-                    "country": "GB",
-                    "sunrise": 1744003317,
-                    "sunset": 1744051371
-                },
-                "timezone": 3600,
-                "id": 2643743,
-                "name": "London",
-                "cod": 200
-            }
-        // "#;
-        let (data, _): (WeatherData, _) = serde_json_core::de::from_str(json_data).unwrap();
-        data
     }
 }
 

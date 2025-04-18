@@ -1,7 +1,135 @@
 use chrono::{DateTime, Utc};
+use defmt::info;
+use embassy_net::{
+    dns::DnsSocket,
+    tcp::client::{TcpClient, TcpClientState},
+    Stack,
+};
 use heapless::{String, Vec};
+use reqwless::{
+    client::{HttpClient, TlsConfig},
+    TlsReference,
+};
 use serde::Deserialize;
 use serde_repr::Deserialize_repr;
+
+const API_KEY: &str = env!("API_KEY");
+
+pub struct WeatherApi {
+    wifi: Stack<'static>,
+    url: String<120>,
+}
+
+impl WeatherApi {
+    pub fn new(wifi: Stack<'static>) -> Self {
+        let mut url = String::new();
+        url.push_str(
+            "https://api.openweathermap.org/data/2.5/weather?q=London&units=metric&appid=",
+        )
+        .unwrap();
+        url.push_str(API_KEY).unwrap();
+        Self { wifi, url }
+    }
+
+    pub async fn access_website(&self, tls_reference: TlsReference<'_>) -> WeatherData {
+        let dns = DnsSocket::new(self.wifi);
+        let tcp_state = TcpClientState::<1, 4096, 4096>::new();
+        let tcp = TcpClient::new(self.wifi, &tcp_state);
+        let tls_config = TlsConfig::new(
+            reqwless::TlsVersion::Tls1_2,
+            reqwless::Certificates {
+                ca_chain: reqwless::X509::pem(
+                    concat!(include_str!("./ca_cert.pem"), "\0").as_bytes(),
+                )
+                .ok(),
+                ..Default::default()
+            },
+            tls_reference,
+        );
+
+        let mut client = HttpClient::new_with_tls(&tcp, &dns, tls_config);
+        let mut buffer = [0u8; 4096];
+        let mut http_req = client
+            .request(reqwless::request::Method::GET, &self.url)
+            .await
+            .unwrap();
+        let response = http_req.send(&mut buffer).await.unwrap();
+
+        info!("Got response");
+        let res = response.body().read_to_end().await.unwrap();
+
+        let (data, _): (WeatherData, _) = serde_json_core::de::from_slice(res).unwrap();
+        data
+    }
+
+    #[allow(dead_code)]
+    fn get_example_data(&self) -> WeatherData {
+        let json_data = r#"
+            {
+                "coord": {
+                    "lon": -0.1257,
+                    "lat": 51.5085
+                },
+                "weather": [
+                    {
+                    "id": 800,
+                    "main": "Clear",
+                    "description": "clear sky",
+                    "icon": "01n"
+                    }
+                ],
+                "base": "stations",
+                "main": {
+                    "temp": 3.75,
+                    "feels_like": 1.23,
+                    "temp_min": 3.75,
+                    "temp_max": 3.75,
+                    "pressure": 1025,
+                    "humidity": 83,
+                    "sea_level": 1025,
+                    "grnd_level": 1020
+                },
+                "visibility": 10000,
+                "wind": {
+                    "speed": 2.72,
+                    "deg": 51,
+                    "gust": 8.22
+                },
+                "clouds": {
+                    "all": 9
+                },
+                "dt": 1743995436,
+                "sys": {
+                    "country": "GB",
+                    "sunrise": 1744003317,
+                    "sunset": 1744051371
+                },
+                "timezone": 3600,
+                "id": 2643743,
+                "name": "London",
+                "cod": 200
+            }
+        // "#;
+        let (data, _): (WeatherData, _) = serde_json_core::de::from_str(json_data).unwrap();
+        data
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct WeatherData {
+    // pub coord: Coord,
+    pub weather: Vec<Weather, 4>,
+    pub main: Main,
+    // pub visibility: i32,
+    pub wind: Wind,
+    // pub rain: Option<Rain>,
+    // pub clouds: Clouds,
+    #[serde(with = "chrono::serde::ts_seconds")]
+    pub dt: DateTime<Utc>,
+    // pub sys: Sys,
+    // pub timezone: i32,
+    pub name: String<20>,
+}
 
 #[derive(Debug, Deserialize_repr)]
 #[repr(u16)]
@@ -149,22 +277,6 @@ impl ConditionCode {
             | ConditionCode::OvercastClouds => "partly_cloudy_day.bmp",
         }
     }
-}
-
-#[derive(Debug, Deserialize)]
-pub struct WeatherData {
-    // pub coord: Coord,
-    pub weather: Vec<Weather, 4>,
-    pub main: Main,
-    // pub visibility: i32,
-    pub wind: Wind,
-    // pub rain: Option<Rain>,
-    // pub clouds: Clouds,
-    #[serde(with = "chrono::serde::ts_seconds")]
-    pub dt: DateTime<Utc>,
-    // pub sys: Sys,
-    // pub timezone: i32,
-    pub name: String<20>,
 }
 
 // #[derive(Debug, Deserialize)]
