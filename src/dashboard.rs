@@ -70,7 +70,7 @@ impl Dashboard {
         loop {
             self.refresh(&api, tls.reference()).await;
 
-            Timer::after(Duration::from_secs(60)).await;
+            Timer::after(Duration::from_secs(60 * 10)).await;
         }
     }
 
