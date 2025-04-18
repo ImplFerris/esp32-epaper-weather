@@ -79,6 +79,6 @@ async fn main(spawner: Spawner) {
     let reset = Output::new(peripherals.GPIO16, Level::Low, OutputConfig::default());
     let epd = Epd1in54::new(&mut spi_dev, busy_in, dc, reset, &mut Delay, None).unwrap();
 
-    let mut app = Dashboard::new(stack, rng, epd, spi_dev);
+    let mut app = Dashboard::new(stack, epd, spi_dev);
     app.start(peripherals.SHA, peripherals.RSA).await;
 }

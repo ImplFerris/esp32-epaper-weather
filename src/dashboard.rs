@@ -43,17 +43,15 @@ type EPD = Epd1in54<SpiDevice, Input<'static>, Output<'static>, Output<'static>,
 pub struct Dashboard {
     display: Display1in54,
     wifi: Stack<'static>,
-    _rng: Rng,
     epd: EPD,
     spi_dev: SpiDevice,
 }
 
 impl Dashboard {
-    pub fn new(wifi: Stack<'static>, rng: Rng, epd: EPD, spi_dev: SpiDevice) -> Self {
+    pub fn new(wifi: Stack<'static>, epd: EPD, spi_dev: SpiDevice) -> Self {
         Self {
             display: Display1in54::default(),
             wifi,
-            _rng: rng,
             epd,
             spi_dev,
         }
